@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Simple Multimodal RAG</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <h2>🔎 Simple Multimodal RAG</h2>
+
+  <div class="card">
+    <h3>🧹 Reset Knowledge Base</h3>
+    <form method="POST" action="/reset">
+      <button type="submit" class="danger">Clear All Indexed Data</button>
+    </form>
+    <p class="meta">Use this to remove previous uploads and start fresh (optional for testing).</p>
+  </div>
+
+  <div class="card">
+    <h3>1) Upload a Document (PDF / Image / Text)</h3>
+    <form method="POST" action="/upload" enctype="multipart/form-data">
+      <input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.txt,.docx" required />
+      <button type="submit">Upload & Index</button>
+    </form>
+    <p class="meta">
+      Upload any file — PDF (text or image), Image (PNG/JPG), or Text (.txt/.docx).
+      The system will automatically extract, OCR, and index the content.
+    </p>
+  </div>
+
+  <div class="card">
+    <h3>2) Ask a question</h3>
+    <form method="POST" action="/query" id="queryForm">
+      <input type="text" name="q" id="qInput" placeholder="e.g., Summarize findings / Find the chart about Q3 sales" required disabled />
+      <label style="display:block;margin:8px 0;">
+        <input type="checkbox" name="all_docs" value="1">
+        Search across all uploads
+      </label>
+      <button type="submit" id="queryButton" disabled>Search & Answer</button>
+    </form>
+    <p id="hint" class="meta" style="color:#777;">Upload a document first to enable this section.</p>
+  </div>
+
+  {% if answer %}
+  <div class="card">
+    <h3>Answer</h3>
+    <div>{{ answer|safe }}</div>
+  </div>
+  {% endif %}
+
+  {% if results %}
+  <div class="card">
+    <h3>Retrieved Context ({{ results|length }})</h3>
+    {% for r in results %}
+      <div class="card">
+        <div class="meta">
+          {{ "[IMAGE]" if r.modality == "image" else "[TEXT]" }}
+          • Score {{ "%.3f"|format(r.score) }}
+          • {{ r.source }}{% if r.page %} (p. {{ r.page }}){% endif %}
+        </div>
+        {% if r.modality == "image" and r.image_path %}
+          <img src="{{ r.image_path }}" alt="extracted image"/>
+          <pre style="white-space: pre-wrap">{{ r.text }}</pre>
+        {% else %}
+          <pre style="white-space: pre-wrap">{{ r.text }}</pre>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
