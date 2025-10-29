@@ -23,7 +23,12 @@ load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # ---- Tesseract path (adjust if needed, keep if already set)
-pytesseract.pytesseract.tesseract_cmd = r"C:\Users\ayush.agarwal\AppData\Local\Programs\Tesseract-OCR\tesseract.exe"
+import os
+if os.name == "nt":  # only for Windows local
+    pytesseract.pytesseract.tesseract_cmd = r"C:\Users\ayush.agarwal\AppData\Local\Programs\Tesseract-OCR\tesseract.exe"
+
+
+# pytesseract.pytesseract.tesseract_cmd = r"C:\Users\ayush.agarwal\AppData\Local\Programs\Tesseract-OCR\tesseract.exe"
 
 # -----------------------------
 # CONFIG

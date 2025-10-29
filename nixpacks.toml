@@ -1,2 +1,6 @@
 [phases.setup]
-aptPkgs = ["tesseract-ocr", "tesseract-ocr-eng"]
+# Install Tesseract from Nix packages
+nixPkgs = ["tesseract5"]
+
+[start]
+cmd = "python main.py"

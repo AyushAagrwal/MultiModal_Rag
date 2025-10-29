@@ -125,4 +125,6 @@ if __name__ == "__main__":
     print("🚀 Starting Multimodal RAG app (persistent indexes, latest-only by default)...")
     os.makedirs(INDEX_DIR, exist_ok=True)
     os.makedirs(IMAGES_DIR, exist_ok=True)
-    app.run(host="0.0.0.0", port=5000, debug=True)
+        # Use Railway's port dynamically
+    port = int(os.getenv("PORT", "8080"))
+    app.run(host="0.0.0.0", port=port, debug=False)
