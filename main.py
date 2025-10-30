@@ -13,25 +13,32 @@ from rag import (
     search_router, generate_answer
 )
 
+# Initialize Flask
 app = Flask(__name__)
+
+# -----------------------------
+# ROUTES
+# -----------------------------
 
 @app.route("/", methods=["GET"])
 def home():
-    # Clean landing flag (UI enablement only)
+    """Landing page (resets UI state)."""
     if os.path.exists(STATUS_FILE):
         os.remove(STATUS_FILE)
     return render_template("index.html", answer=None, results=None)
 
+
 @app.route("/images/<path:filename>")
 def serve_image(filename):
+    """Serve extracted or uploaded images."""
     return send_from_directory(IMAGES_DIR, filename)
+
 
 @app.route("/upload", methods=["POST"])
 def upload_unified():
     """
-    Upload any of: .pdf, .png/.jpg/.jpeg, .txt/.docx
-    Appends to existing FAISS + metadata (persistent KB).
-    Also sets 'latest document' for default latest-only answers.
+    Uploads a file (PDF / Image / Text) and indexes it in FAISS.
+    Automatically sets this file as 'latest' for default queries.
     """
     file = request.files.get("file")
     if not file:
@@ -44,23 +51,26 @@ def upload_unified():
     os.makedirs(IMAGES_DIR, exist_ok=True)
 
     document_id = str(uuid.uuid4())
-    set_current_doc_id(document_id)  # 🔖 prefer this upload for answers
+    set_current_doc_id(document_id)  # track latest upload
 
     success, msg = False, ""
 
     try:
+        # 📘 PDF Upload
         if ext == ".pdf":
-            pdf_save = os.path.join(INDEX_DIR, filename)
-            file.save(pdf_save)
-            text_ok = build_text_index_from_pdf(pdf_save, document_id=document_id)
-            image_ok = build_image_index_from_pdf(pdf_save, document_id=document_id)
+            pdf_path = os.path.join(INDEX_DIR, filename)
+            file.save(pdf_path)
+            text_ok = build_text_index_from_pdf(pdf_path, document_id=document_id)
+            image_ok = build_image_index_from_pdf(pdf_path, document_id=document_id)
             success = text_ok or image_ok
             msg = f"PDF '{filename}' indexed successfully!" if success else "No data found in PDF."
 
+        # 🖼️ Image Upload
         elif ext in [".png", ".jpg", ".jpeg"]:
             success = add_standalone_image_to_index(file, document_id=document_id)
             msg = f"Image '{filename}' indexed successfully!" if success else "Image indexing failed."
 
+        # 📄 Text Upload
         elif ext in [".txt", ".docx"]:
             success, result_msg = build_index_from_textfile(file, document_id=document_id)
             msg = f"Text file '{filename}' indexed successfully!" if success else result_msg
@@ -71,13 +81,15 @@ def upload_unified():
     except Exception as e:
         msg = f"Error while processing {filename}: {e}"
 
+    # Handle failures
     if not success:
         return render_template("index.html", answer=f"⚠️ {msg}", results=None)
 
-    # Flag for UI to enable the query form
+    # Write flag for frontend polling
     with open(STATUS_FILE, "w") as f:
         f.write("ready")
 
+    print(f"✅ {msg}")
     success_html = f"""
     <p style='color:green;font-weight:bold;margin:20px 0;'>
       ✅ {msg} You can now ask a question.
@@ -85,19 +97,24 @@ def upload_unified():
     """
     return render_template("index.html", answer=None, results=None) + success_html
 
+
 @app.route("/upload_status")
 def upload_status():
-    ready = os.path.exists(STATUS_FILE)
-    return jsonify({"ready": ready})
+    """Simple JSON endpoint to let the UI know if upload finished."""
+    return jsonify({"ready": os.path.exists(STATUS_FILE)})
+
 
 @app.route("/query", methods=["POST"])
 def query():
+    """
+    Accepts a text query, retrieves top matches (text/image),
+    and generates a grounded answer.
+    """
     q = (request.form.get("q") or (request.is_json and (request.json.get("q")))) or ""
     q = q.strip()
     if not q:
         return "Missing 'q' parameter.", 400
 
-    # latest-only unless user ticks "Search across all uploads"
     all_docs = (request.form.get("all_docs") == "1") if not request.is_json else bool(request.json.get("all_docs", False))
     latest_only = not all_docs
 
@@ -113,18 +130,27 @@ def query():
 
     if request.is_json:
         return jsonify({"mode": mode, "answer": answer, "results": results})
+
     return render_template("index.html", answer=answer, results=results)
 
-# Optional manual reset
+
 @app.route("/reset", methods=["POST"])
 def reset():
+    """Clear all indexes and metadata (manual reset)."""
     clear_all_indexes()
     return render_template("index.html", answer="🧹 All indexes and metadata cleared. Start fresh!", results=None)
 
+# -----------------------------
+# ENTRYPOINT
+# -----------------------------
 if __name__ == "__main__":
-    print("🚀 Starting Multimodal RAG app (persistent indexes, latest-only by default)...")
+    print("🚀 Starting Multimodal RAG app on Railway (persistent indexes, latest-only by default)...")
+
+    # Ensure directories exist
     os.makedirs(INDEX_DIR, exist_ok=True)
     os.makedirs(IMAGES_DIR, exist_ok=True)
-        # Use Railway's port dynamically
+
+    # Use Railway's dynamic port
     port = int(os.getenv("PORT", "8080"))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    print(f"📡 Listening on 0.0.0.0:{port}")
+    app.run(host="0.0.0.0", port=port)
